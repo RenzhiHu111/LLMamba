@@ -4,7 +4,11 @@ from os import path as osp
 
 
 def ordered_yaml():
+    """Support OrderedDict for yaml.
 
+    Returns:
+        yaml Loader and Dumper.
+    """
     try:
         from yaml import CDumper as Dumper
         from yaml import CLoader as Loader
@@ -25,13 +29,23 @@ def ordered_yaml():
 
 
 def parse(opt_path, is_train=True):
+    """Parse option file.
+
+    Args:
+        opt_path (str): Option file path.
+        is_train (str): Indicate whether in training or not. Default: True.
+
+    Returns:
+        (dict): Options.
+    """
     with open(opt_path, mode='r') as f:
         Loader, _ = ordered_yaml()
         opt = yaml.load(f, Loader=Loader)
 
     opt['is_train'] = is_train
 
-    opt['name'] = osp.basename(opt_path).split('.')[0]  # 获取文件名
+    opt['name'] = osp.basename(opt_path).split('.')[0]
+    # datasets
     for phase, dataset in opt['datasets'].items():
         # for several datasets, e.g., test_1, test_2
         phase = phase.split('_')[0]
@@ -77,6 +91,15 @@ def parse(opt_path, is_train=True):
 
 
 def dict2str(opt, indent_level=1):
+    """dict to string for printing options.
+
+    Args:
+        opt (dict): Option dict.
+        indent_level (int): Indent level. Default: 1.
+
+    Return:
+        (str): Option string for printing.
+    """
     msg = '\n'
     for k, v in opt.items():
         if isinstance(v, dict):

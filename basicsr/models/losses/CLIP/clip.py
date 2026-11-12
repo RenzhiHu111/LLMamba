@@ -201,7 +201,6 @@ def load(name: str, device: Union[str, torch.device] = "cuda" if torch.cuda.is_a
 
 
 def tokenize(texts: Union[str, List[str]], context_length: int = 77, truncate: bool = False) -> Union[torch.IntTensor, torch.LongTensor]:
-    #truncate：如果为True，则对超过上限的文本进行截断，否则进行填充。
     """
     Returns the tokenized representation of given input string(s)
 

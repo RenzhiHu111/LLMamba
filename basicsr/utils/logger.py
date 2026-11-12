@@ -6,7 +6,19 @@ from .dist_util import get_dist_info, master_only
 
 initialized_logger = {}
 
+
 class MessageLogger():
+    """Message logger for printing.
+
+    Args:
+        opt (dict): Config. It contains the following keys:
+            name (str): Exp name.
+            logger (dict): Contains 'print_freq' (str) for logger interval.
+            train (dict): Contains 'total_iter' (int) for total iters.
+            use_tb_logger (bool): Use tensorboard logger.
+        start_iter (int): Start iter. Default: 1.
+        tb_logger (obj:`tb_logger`): Tensorboard logger. Default： None.
+    """
 
     def __init__(self, opt, start_iter=1, tb_logger=None):
         self.exp_name = opt['name']
@@ -20,6 +32,18 @@ class MessageLogger():
 
     @master_only
     def __call__(self, log_vars):
+        """Format logging message.
+
+        Args:
+            log_vars (dict): It contains the following keys:
+                epoch (int): Epoch number.
+                iter (int): Current iter.
+                lrs (list): List for learning rates.
+
+                time (float): Iter time.
+                data_time (float): Data time for each iter.
+        """
+        # epoch, iter, learning rates
         epoch = log_vars.pop('epoch')
         current_iter = log_vars.pop('iter')
         lrs = log_vars.pop('lrs')
@@ -42,8 +66,10 @@ class MessageLogger():
             message += f'[eta: {eta_str}, '
             message += f'time (data): {iter_time:.3f} ({data_time:.3f})] '
 
+        # other items, especially losses
         for k, v in log_vars.items():
             message += f'{k}: {v:.4e} '
+            # tensorboard logger
             if self.use_tb_logger and 'debug' not in self.exp_name:
                 if k.startswith('l_'):
                     self.tb_logger.add_scalar(f'losses/{k}', v, current_iter)
@@ -61,6 +87,7 @@ def init_tb_logger(log_dir):
 
 @master_only
 def init_wandb_logger(opt):
+    """We now only use wandb to sync tensorboard log."""
     import wandb
     logger = logging.getLogger('basicsr')
 
@@ -81,8 +108,25 @@ def init_wandb_logger(opt):
 
 
 def get_root_logger(logger_name='basicsr', log_level=logging.INFO, log_file=None):
+    """Get the root logger.
 
+    The logger will be initialized if it has not been initialized. By default a
+    StreamHandler will be added. If `log_file` is specified, a FileHandler will
+    also be added.
+
+    Args:
+        logger_name (str): root logger name. Default: 'basicsr'.
+        log_file (str | None): The log filename. If specified, a FileHandler
+            will be added to the root logger.
+        log_level (int): The root logger level. Note that only the process of
+            rank 0 is affected, while other processes will set the level to
+            "Error" and be silent most of the time.
+
+    Returns:
+        logging.Logger: The root logger.
+    """
     logger = logging.getLogger(logger_name)
+    # if the logger has been initialized, just return it
     if logger_name in initialized_logger:
         return logger
     if logger_name != 'metric':
@@ -111,7 +155,10 @@ def get_root_logger(logger_name='basicsr', log_level=logging.INFO, log_file=None
 
 
 def get_env_info():
+    """Get environment information.
 
+    Currently, only log the software version.
+    """
     import torch
     import torchvision
 

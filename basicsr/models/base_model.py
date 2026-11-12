@@ -12,6 +12,8 @@ logger = logging.getLogger('basicsr')
 
 
 class BaseModel():
+    """Base model."""
+
     def __init__(self, opt):
         self.opt = opt
         self.device = torch.device('cuda' if opt['num_gpu'] != 0 else 'cpu')
@@ -29,10 +31,20 @@ class BaseModel():
         pass
 
     def save(self, epoch, current_iter):
+        """Save networks and training state."""
         pass
 
     def validation(self, dataloader, current_iter, tb_logger, save_img=False, rgb2bgr=True, use_image=True):
+        """Validation function.
 
+        Args:
+            dataloader (torch.utils.data.DataLoader): Validation dataloader.
+            current_iter (int): Current iteration.
+            tb_logger (tensorboard logger): Tensorboard logger.
+            save_img (bool): Whether to save images. Default: False.
+            rgb2bgr (bool): Whether to save images using rgb2bgr. Default: True
+            use_image (bool): Whether to use saved images to compute metrics (PSNR, SSIM), if not, then use data directly from network' output. Default: True
+        """
         if self.opt['dist']:
             return self.dist_validation(dataloader, current_iter, tb_logger, save_img, rgb2bgr, use_image)
         else:
@@ -53,6 +65,13 @@ class BaseModel():
         return self.log_dict
 
     def model_to_device(self, net):
+        """Model to device. It also warps models with DistributedDataParallel
+        or DataParallel.
+
+        Args:
+            net (nn.Module)
+        """
+
         net = net.to(self.device)
         if self.opt['dist']:
             find_unused_parameters = self.opt.get('find_unused_parameters',
@@ -66,6 +85,7 @@ class BaseModel():
         return net
 
     def setup_schedulers(self):
+        """Set up schedulers."""
         train_opt = self.opt['train']
         scheduler_type = train_opt['scheduler'].pop('type')
         if scheduler_type in ['MultiStepLR', 'MultiStepRestartLR']:
@@ -113,12 +133,20 @@ class BaseModel():
                 f'Scheduler {scheduler_type} is not implemented yet.')
 
     def get_bare_model(self, net):
+        """Get bare model, especially under wrapping with
+        DistributedDataParallel or DataParallel.
+        """
         if isinstance(net, (DataParallel, DistributedDataParallel)):
             net = net.module
         return net
 
     @master_only
     def print_network(self, net):
+        """Print the str and parameter number of a network.
+
+        Args:
+            net (nn.Module)
+        """
         if isinstance(net, (DataParallel, DistributedDataParallel)):
             net_cls_str = (f'{net.__class__.__name__} - '
                            f'{net.module.__class__.__name__}')
@@ -134,11 +162,18 @@ class BaseModel():
         logger.info(net_str)
 
     def _set_lr(self, lr_groups_l):
+        """Set learning rate for warmup.
+
+        Args:
+            lr_groups_l (list): List for lr_groups, each for an optimizer.
+        """
         for optimizer, lr_groups in zip(self.optimizers, lr_groups_l):
             for param_group, lr in zip(optimizer.param_groups, lr_groups):
                 param_group['lr'] = lr
 
     def _get_init_lr(self):
+        """Get the initial lr, which is set by the scheduler.
+        """
         init_lr_groups_l = []
         for optimizer in self.optimizers:
             init_lr_groups_l.append(
@@ -146,6 +181,13 @@ class BaseModel():
         return init_lr_groups_l
 
     def update_learning_rate(self, current_iter, warmup_iter=-1):
+        """Update learning rate.
+
+        Args:
+            current_iter (int): Current iteration.
+            warmup_iter (int)： Warmup iter numbers. -1 for no warmup.
+                Default： -1.
+        """
         if current_iter > 1:
             for scheduler in self.schedulers:
                 scheduler.step()
@@ -170,6 +212,15 @@ class BaseModel():
 
     @master_only
     def save_network(self, net, net_label, current_iter, param_key='params'):
+        """Save networks.
+
+        Args:
+            net (nn.Module | list[nn.Module]): Network(s) to be saved.
+            net_label (str): Network label.
+            current_iter (int): Current iter number.
+            param_key (str | list[str]): The parameter key(s) to save network.
+                Default: 'params'.
+        """
         if current_iter == -1:
             current_iter = 'latest'
         save_filename = f'{net_label}_{current_iter}.pth'
@@ -193,6 +244,17 @@ class BaseModel():
         torch.save(save_dict, save_path)
 
     def _print_different_keys_loading(self, crt_net, load_net, strict=True):
+        """Print keys with differnet name or different size when loading models.
+
+        1. Print keys with differnet names.
+        2. If strict=False, print the same key but with different tensor size.
+            It also ignore these keys with different sizes (not load).
+
+        Args:
+            crt_net (torch model): Current network.
+            load_net (dict): Loaded network.
+            strict (bool): Whether strictly loaded. Default: True.
+        """
         crt_net = self.get_bare_model(crt_net)
         crt_net = crt_net.state_dict()
         crt_net_keys = set(crt_net.keys())
@@ -217,6 +279,16 @@ class BaseModel():
                     load_net[k + '.ignore'] = load_net.pop(k)
 
     def load_network(self, net, load_path, strict=True, param_key='params'):
+        """Load network.
+
+        Args:
+            load_path (str): The path of networks to be loaded.
+            net (nn.Module): Network.
+            strict (bool): Whether strictly loaded.
+            param_key (str): The parameter key of loaded network. If set to
+                None, use the root 'path'.
+                Default: 'params'.
+        """
         net = self.get_bare_model(net)
         logger.info(
             f'Loading {net.__class__.__name__} model from {load_path}.')
@@ -238,6 +310,13 @@ class BaseModel():
 
     @master_only
     def save_training_state(self, epoch, current_iter, **kwargs):
+        """Save training states during training, which will be used for
+        resuming.
+
+        Args:
+            epoch (int): Current epoch.
+            current_iter (int): Current iteration.
+        """
         if current_iter != -1:
             state = {
                 'epoch': epoch,
@@ -263,6 +342,11 @@ class BaseModel():
             torch.save(state, save_path)
 
     def resume_training(self, resume_state):
+        """Reload the optimizers and schedulers for resumed training.
+
+        Args:
+            resume_state (dict): Resume state.
+        """
         resume_optimizers = resume_state['optimizers']
         resume_schedulers = resume_state['schedulers']
         assert len(resume_optimizers) == len(
@@ -280,6 +364,13 @@ class BaseModel():
                 self.amp_scaler.load_state_dict(resume_state['amp_scaler'])
 
     def reduce_loss_dict(self, loss_dict):
+        """reduce loss dict.
+
+        In distributed training, it averages the losses among different GPUs .
+
+        Args:
+            loss_dict (OrderedDict): Loss dict.
+        """
         with torch.no_grad():
             if self.opt['dist']:
                 keys = []

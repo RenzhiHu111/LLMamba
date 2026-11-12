@@ -4,7 +4,9 @@ import logging
 import math
 import random
 import time
+import os
 import torch
+os.environ['CUDA_VISIBLE_DEVICES']='0'
 from os import path as osp
 from basicsr.data import create_dataloader, create_dataset
 from basicsr.data.data_sampler import EnlargedSampler
@@ -19,10 +21,12 @@ from basicsr.utils.misc import mkdir_and_rename2
 from basicsr.utils.options import dict2str, parse
 import numpy as np
 
+# torch.autograd.set_detect_anomaly(True)
+
 def parse_options(is_train=True):
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--opt', type=str, default='LLMamba_LOL_v1.yml', help='Path to option YAML file.')
+        '--opt', type=str, default='LLMamba_Stereo_image.yml', help='Path to option YAML file.')
     parser.add_argument(
         '--launcher',
         choices=['none', 'pytorch', 'slurm'],
@@ -55,6 +59,7 @@ def parse_options(is_train=True):
 
     return opt
 
+
 def init_loggers(opt):
     log_file = osp.join(opt['path']['log'],
                         f"train_{opt['name']}_{get_time_str()}.log")
@@ -72,6 +77,14 @@ def init_loggers(opt):
     logger.info(get_env_info())
     logger.info(dict2str(opt))
 
+    # initialize wandb logger before tensorboard logger to allow proper sync:
+    # if (opt['logger'].get('wandb')
+    #         is not None) and (opt['logger']['wandb'].get('project')
+    #                           is not None) and ('debug' not in opt['name']):
+    #     assert opt['logger'].get('use_tb_logger') is True, (
+    #         'should turn on tensorboard when using wandb')
+    #     init_wandb_logger(opt)
+
     tb_logger = None
     if opt['logger'].get('use_tb_logger') and 'debug' not in opt['name']:
         tb_logger = init_tb_logger(log_dir=osp.join('tb_logger', opt['name']))
@@ -79,14 +92,17 @@ def init_loggers(opt):
 
 
 def create_train_val_dataloader(opt, logger):
-
+    # create train and val dataloaders
     train_loader, val_loader = None, None
     for phase, dataset_opt in opt['datasets'].items():
+        # stx()
         if phase == 'train':
             dataset_enlarge_ratio = dataset_opt.get('dataset_enlarge_ratio', 1)
             train_set = create_dataset(dataset_opt)
+            # stx()
             train_sampler = EnlargedSampler(train_set, opt['world_size'],
                                             opt['rank'], dataset_enlarge_ratio)
+            # stx()
             train_loader = create_dataloader(
                 train_set,
                 dataset_opt,
@@ -94,6 +110,8 @@ def create_train_val_dataloader(opt, logger):
                 dist=opt['dist'],
                 sampler=train_sampler,
                 seed=opt['manual_seed'])
+            # stx()
+
             num_iter_per_epoch = math.ceil(
                 len(train_set) * dataset_enlarge_ratio /
                 (dataset_opt['batch_size_per_gpu'] * opt['world_size']))
@@ -110,6 +128,7 @@ def create_train_val_dataloader(opt, logger):
 
         elif phase == 'val':
             val_set = create_dataset(dataset_opt)
+            # stx()
             val_loader = create_dataloader(
                 val_set,
                 dataset_opt,
@@ -127,14 +146,20 @@ def create_train_val_dataloader(opt, logger):
 
 
 def main():
+    # parse options, set distributed setting, set ramdom seed
     opt = parse_options(is_train=True)
+
     torch.backends.cudnn.benchmark = True
+    # torch.backends.cudnn.deterministic = True
+
+    # automatic resume ..
     state_folder_path = 'experiments/{}/training_states/'.format(opt['name'])
     import os
     try:
         states = os.listdir(state_folder_path)
     except:
         states = []
+
     resume_state = None
     if len(states) > 0:
         max_state_file = '{}.state'.format(max([int(x[0:-6]) for x in states]))
@@ -149,6 +174,7 @@ def main():
     else:
         resume_state = None
 
+    # mkdir for experiments and logger
     if resume_state is None:
         make_exp_dirs(opt)
         if opt['logger'].get('use_tb_logger') and 'debug' not in opt[
@@ -156,15 +182,18 @@ def main():
             mkdir_and_rename2(
                 osp.join('tb_logger', opt['name']), opt['rename_flag'])
 
+    # initialize loggers
     logger, tb_logger = init_loggers(opt)
 
+    # create train and validation dataloaders
     result = create_train_val_dataloader(opt, logger)
     train_loader, train_sampler, val_loader, total_epochs, total_iters = result
 
-    if resume_state:
+    # create model
+    if resume_state:  # resume training
         check_resume(opt, resume_state['iter'])
         model = create_model(opt)
-        model.resume_training(resume_state)
+        model.resume_training(resume_state)  # handle optimizers and schedulers
         logger.info(f"Resuming training from epoch: {resume_state['epoch']}, "
                     f"iter: {resume_state['iter']}.")
         start_epoch = resume_state['epoch']
@@ -180,10 +209,12 @@ def main():
         best_metric = {'iter': 0}
         for k, v in opt['val']['metrics'].items():
             best_metric[k] = 0
-
+        # stx()
     print(model)
+    # create message logger (formatted outputs)
     msg_logger = MessageLogger(opt, current_iter, tb_logger)
 
+    # dataloader prefetcher
     prefetch_mode = opt['datasets']['train'].get('prefetch_mode')
     if prefetch_mode is None or prefetch_mode == 'cpu':
         prefetcher = CPUPrefetcher(train_loader)
@@ -196,10 +227,13 @@ def main():
         raise ValueError(f'Wrong prefetch_mode {prefetch_mode}.'
                          "Supported ones are: None, 'cuda', 'cpu'.")
 
+    # training
     logger.info(
         f'Start training from epoch: {start_epoch}, iter: {current_iter}')
     data_time, iter_time = time.time(), time.time()
     start_time = time.time()
+
+    # for epoch in range(start_epoch, total_epochs + 1):
 
     iters = opt['datasets']['train'].get('iters')
     batch_size = opt['datasets']['train'].get('batch_size_per_gpu')
@@ -226,9 +260,13 @@ def main():
             current_iter += 1
             if current_iter > total_iters:
                 break
+            # update learning rate
             model.update_learning_rate(
                 current_iter, warmup_iter=opt['train'].get('warmup_iter', -1))
-            j = ((current_iter > groups) != True).nonzero()[0]
+
+            # ------Progressive learning ---------------------
+            j = ((current_iter > groups) != True).nonzero()[
+                0]
             if len(j) == 0:
                 bs_j = len(groups) - 1
             else:
@@ -258,11 +296,13 @@ def main():
                 y1 = y0 + mini_gt_size
                 lq = lq[:, :, x0:x1, y0:y1]
                 gt = gt[:, :, x0 * scale:x1 * scale, y0 * scale:y1 * scale]
-
+            # -------------------------------------------
+            # print(lq.shape)
             model.feed_train_data({'lq': lq, 'gt': gt})
             model.optimize_parameters(current_iter)
 
             iter_time = time.time() - iter_time
+            # log
             if current_iter % opt['logger']['print_freq'] == 0:
                 log_vars = {'epoch': epoch, 'iter': current_iter}
                 log_vars.update({'lrs': model.get_current_learning_rate()})
@@ -270,46 +310,56 @@ def main():
                 log_vars.update(model.get_current_log())
                 msg_logger(log_vars)
 
+            # save models and training states
             if current_iter % opt['logger']['save_checkpoint_freq'] == 0:
                 logger.info('Saving models and training states.')
                 model.save(epoch, current_iter, best_metric=best_metric)
 
+            # validation
             if opt.get('val') is not None and (current_iter %
                                                opt['val']['val_freq'] == 0):
                 rgb2bgr = opt['val'].get('rgb2bgr', True)
+                # wheather use uint8 image to compute metrics
                 use_image = opt['val'].get('use_image', True)
                 current_metric = model.validation(val_loader, current_iter, tb_logger,
                                                   opt['val']['save_img'], rgb2bgr, use_image)
+                # log cur metric to csv file
                 logger_metric = get_root_logger(logger_name='metric')
                 metric_str = f'{current_iter},{current_metric}'
                 logger_metric.info(metric_str)
 
+                # log best metric
                 if best_metric['psnr'] < current_metric:
                     best_metric['psnr'] = current_metric
+                    # save best model
                     best_metric['iter'] = current_iter
                     model.save_best(best_metric)
                 if tb_logger:
-                    tb_logger.add_scalar(
+                    tb_logger.add_scalar(  # best iter
                         f'metrics/best_iter', best_metric['iter'], current_iter)
-                    for k, v in opt['val']['metrics'].items():
+                    for k, v in opt['val']['metrics'].items():  # best_psnr
                         tb_logger.add_scalar(
                             f'metrics/best_{k}', best_metric[k], current_iter)
 
             data_time = time.time()
             iter_time = time.time()
             train_data = prefetcher.next()
+        # end of iter
         epoch += 1
+
+    # end of epoch
 
     consumed_time = str(
         datetime.timedelta(seconds=int(time.time() - start_time)))
     logger.info(f'End of training. Time consumed: {consumed_time}')
     logger.info('Save the latest model.')
-    model.save(epoch=-1, current_iter=-1)
+    model.save(epoch=-1, current_iter=-1)  # -1 stands for the latest
     if opt.get('val') is not None:
         model.validation(val_loader, current_iter, tb_logger,
                          opt['val']['save_img'])
     if tb_logger:
         tb_logger.close()
+
 
 if __name__ == '__main__':
     main()

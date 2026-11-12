@@ -27,6 +27,7 @@ def norm(norm_type, nc):
         raise NotImplementedError('normalization layer [{:s}] is not found'.format(norm_type))
     return layer
 
+
 def pad(pad_type, padding):
     pad_type = pad_type.lower()
     if padding == 0:
@@ -39,10 +40,12 @@ def pad(pad_type, padding):
         raise NotImplementedError('padding layer [{:s}] is not implemented'.format(pad_type))
     return layer
 
+
 def get_valid_padding(kernel_size, dilation):
     kernel_size = kernel_size + (kernel_size - 1) * (dilation - 1)
     padding = (kernel_size - 1) // 2
     return padding
+
 
 def conv_block(in_nc, out_nc, kernel_size, stride=1, dilation=1, groups=1, bias=True,
                pad_type='zero', norm_type=None, act_type='relu'):
@@ -56,6 +59,7 @@ def conv_block(in_nc, out_nc, kernel_size, stride=1, dilation=1, groups=1, bias=
     n = norm(norm_type, out_nc) if norm_type else None
     return sequential(p, c, n, a)
 
+
 def activation(act_type, inplace=True, neg_slope=0.05, n_prelu=1):
     act_type = act_type.lower()
     if act_type == 'relu':
@@ -68,6 +72,7 @@ def activation(act_type, inplace=True, neg_slope=0.05, n_prelu=1):
         raise NotImplementedError('activation layer [{:s}] is not found'.format(act_type))
     return layer
 
+
 class ShortcutBlock(nn.Module):
     def __init__(self, submodule):
         super(ShortcutBlock, self).__init__()
@@ -77,16 +82,19 @@ class ShortcutBlock(nn.Module):
         output = x + self.sub(x)
         return output
 
+
 def mean_channels(F):
     assert (F.dim() == 4)
     spatial_sum = F.sum(3, keepdim=True).sum(2, keepdim=True)
     return spatial_sum / (F.size(2) * F.size(3))
+
 
 def stdv_channels(F):
     assert (F.dim() == 4)
     F_mean = mean_channels(F)
     F_variance = (F - F_mean).pow(2).sum(3, keepdim=True).sum(2, keepdim=True) / (F.size(2) * F.size(3))
     return F_variance.pow(0.5)
+
 
 def sequential(*args):
     if len(args) == 1:
@@ -102,6 +110,7 @@ def sequential(*args):
             modules.append(module)
     return nn.Sequential(*modules)
 
+
 class LSA(nn.Module):
     def __init__(self, n_feats, conv):
         super(LSA, self).__init__()
@@ -114,6 +123,7 @@ class LSA(nn.Module):
         self.conv3_ = conv(f, f, kernel_size=3, padding=1)
         self.conv4 = conv(f, n_feats, kernel_size=1)
         self.sigmoid = nn.Sigmoid()
+        # self.relu = nn.ReLU(inplace=True)
         self.act = nn.SiLU()
 
     def forward(self, x):
@@ -127,6 +137,7 @@ class LSA(nn.Module):
         cf = self.conv_f(c1_)
         c4 = self.conv4(c3 + cf)
         m = self.sigmoid(c4)
+
         return x * m
 
 class LCA(nn.Module):

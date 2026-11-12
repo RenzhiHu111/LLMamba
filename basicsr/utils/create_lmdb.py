@@ -5,6 +5,15 @@ from basicsr.utils import scandir
 from basicsr.utils.lmdb_util import make_lmdb_from_imgs
 
 def prepare_keys(folder_path, suffix='png'):
+    """Prepare image path list and keys for DIV2K dataset.
+
+    Args:
+        folder_path (str): Folder path.
+
+    Returns:
+        list[str]: Image path list.
+        list[str]: Key list.
+    """
     print('Reading image path list ...')
     img_path_list = sorted(
         list(scandir(folder_path, suffix=suffix, recursive=False)))

@@ -13,19 +13,29 @@ from basicsr.utils.dist_util import get_dist_info
 
 __all__ = ['create_dataset', 'create_dataloader']
 
+# automatically scan and import dataset modules
+# scan all the files under the data folder with '_dataset' in file names
 data_folder = osp.dirname(osp.abspath(__file__))
 dataset_filenames = [
     osp.splitext(osp.basename(v))[0] for v in scandir(data_folder)
     if v.endswith('_dataset.py')
 ]
-
+# stx()
 _dataset_modules = [
     importlib.import_module(f'basicsr.data.{file_name}')
     for file_name in dataset_filenames
 ]
 
-def create_dataset(dataset_opt):
 
+# stx()
+def create_dataset(dataset_opt):
+    """Create dataset.
+
+    Args:
+        dataset_opt (dict): Configuration for dataset. It constains:
+            name (str): Dataset name.
+            type (str): Dataset type.
+    """
     dataset_type = dataset_opt['type']
 
     for module in _dataset_modules:
@@ -43,19 +53,35 @@ def create_dataset(dataset_opt):
         'is created.')
     return dataset
 
+
 def create_dataloader(dataset,
                       dataset_opt,
                       num_gpu=1,
                       dist=False,
                       sampler=None,
                       seed=None):
+    """Create dataloader.
+
+    Args:
+        dataset (torch.utils.data.Dataset): Dataset.
+        dataset_opt (dict): Dataset options. It contains the following keys:
+            phase (str): 'train' or 'val'.
+            num_worker_per_gpu (int): Number of workers for each GPU.
+            batch_size_per_gpu (int): Training batch size for each GPU.
+        num_gpu (int): Number of GPUs. Used only in the train phase.
+            Default: 1.
+        dist (bool): Whether in distributed training. Used only in the train
+            phase. Default: False.
+        sampler (torch.utils.data.sampler): Data sampler. Default: None.
+        seed (int | None): Seed. Default: None
+    """
     phase = dataset_opt['phase']
     rank, _ = get_dist_info()
     if phase == 'train':
-        if dist:
+        if dist:  # distributed training
             batch_size = dataset_opt['batch_size_per_gpu']
             num_workers = dataset_opt['num_worker_per_gpu']
-        else:
+        else:  # non-distributed training
             multiplier = 1 if num_gpu == 0 else num_gpu
             batch_size = dataset_opt['batch_size_per_gpu'] * multiplier
             num_workers = dataset_opt['num_worker_per_gpu'] * multiplier
@@ -89,9 +115,13 @@ def create_dataloader(dataset,
         return PrefetchDataLoader(
             num_prefetch_queue=num_prefetch_queue, **dataloader_args)
     else:
+        # prefetch_mode=None: Normal dataloader
+        # prefetch_mode='cuda': dataloader for CUDAPrefetcher
         return torch.utils.data.DataLoader(**dataloader_args)
 
+
 def worker_init_fn(worker_id, num_workers, rank, seed):
+    # Set the worker seed to num_workers * rank + worker_id + seed
     worker_seed = num_workers * rank + worker_id + seed
     np.random.seed(worker_seed)
     random.seed(worker_seed)

@@ -47,6 +47,9 @@ def evaluate_raindrop(in_dir, gt_dir):
 
     ave_psnr = np.array(psnrs).mean()
     ave_ssim = np.array(ssims).mean()
-    ave_rmse = np.array(rmses).mean()
-    return ave_psnr, ave_ssim, ave_rmse
+    ave_rmse = np.array(rmses).mean()  # Calculate the mean RMSE
+    return ave_psnr, ave_ssim, ave_rmse  # Return RMSE along with PSNR and SSIM
 
+if __name__ == '__main__':
+    ave_psnr, ave_ssim, ave_rmse = evaluate_raindrop('/mnt/workspace/Retinexformer/results/LOL_v2_real/RetinexFormer_LOL_v2_real/LOL_v2_real', '/mnt/workspace/Retinexformer/data/LOLv2/Real_captured/Test/Normal')
+    print('RMSE: ', ave_rmse)

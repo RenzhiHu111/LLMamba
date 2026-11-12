@@ -5,6 +5,15 @@ from torch.utils.data import DataLoader
 
 
 class PrefetchGenerator(threading.Thread):
+    """A general prefetch generator.
+
+    Ref:
+    https://stackoverflow.com/questions/7323664/python-generator-pre-fetch
+
+    Args:
+        generator: Python generator.
+        num_prefetch_queue (int): Number of prefetch queue.
+    """
 
     def __init__(self, generator, num_prefetch_queue):
         threading.Thread.__init__(self)
@@ -29,6 +38,19 @@ class PrefetchGenerator(threading.Thread):
 
 
 class PrefetchDataLoader(DataLoader):
+    """Prefetch version of dataloader.
+
+    Ref:
+    https://github.com/IgorSusmelj/pytorch-styleguide/issues/5#
+
+    TODO:
+    Need to test on single gpu and ddp (multi-gpu). There is a known issue in
+    ddp.
+
+    Args:
+        num_prefetch_queue (int): Number of prefetch queue.
+        kwargs (dict): Other arguments for dataloader.
+    """
 
     def __init__(self, num_prefetch_queue, **kwargs):
         self.num_prefetch_queue = num_prefetch_queue
@@ -39,6 +61,11 @@ class PrefetchDataLoader(DataLoader):
 
 
 class CPUPrefetcher():
+    """CPU prefetcher.
+
+    Args:
+        loader: Dataloader.
+    """
 
     def __init__(self, loader):
         self.ori_loader = loader
@@ -55,6 +82,17 @@ class CPUPrefetcher():
 
 
 class CUDAPrefetcher():
+    """CUDA prefetcher.
+
+    Ref:
+    https://github.com/NVIDIA/apex/issues/304#
+
+    It may consums more GPU memory.
+
+    Args:
+        loader: Dataloader.
+        opt (dict): Options.
+    """
 
     def __init__(self, loader, opt):
         self.ori_loader = loader

@@ -1,8 +1,15 @@
+# Retinexformer: One-stage Retinex-based Transformer for Low-light Image Enhancement
+# Yuanhao Cai, Hao Bian, Jing Lin, Haoqian Wang, Radu Timofte, Yulun Zhang
+# International Conference on Computer Vision (ICCV), 2023
+# https://arxiv.org/abs/2303.06705
+# https://github.com/caiyuanhao1998/Retinexformer
+
 import numpy as np
 import os
 import cv2
 import math
 from pdb import set_trace as stx
+
 
 def calculate_psnr(img1, img2, border=0):
     # img1 and img2 have range [0, 255]
@@ -29,8 +36,14 @@ def PSNR(img1, img2):
     return 10 * math.log10(1 / mse_)
 
 
+# --------------------------------------------
+# SSIM
+# --------------------------------------------
 def calculate_ssim(img1, img2, border=0):
-
+    '''calculate SSIM
+    the same outputs as MATLAB's
+    img1, img2: [0, 255]
+    '''
     #img1 = img1.squeeze()
     #img2 = img2.squeeze()
     if not img1.shape == img2.shape:
@@ -93,6 +106,12 @@ def save_gray_img(filepath, img):
 
 
 def visualization(feature, save_path, type='max', colormap=cv2.COLORMAP_JET):
+    '''
+    :param feature: [C,H,W]
+    :param save_path: saving path
+    :param type: 'mean' or 'max'
+    :param colormap: the type of the pseudocolor map
+    '''
     feature = feature.cpu().numpy()
     if type == 'mean':
         feature = np.mean(feature, axis=0)

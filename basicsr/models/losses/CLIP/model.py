@@ -46,7 +46,6 @@ class Bottleneck(nn.Module):
         out = self.relu1(self.bn1(self.conv1(x)))
         out = self.relu2(self.bn2(self.conv2(out)))
         out = self.avgpool(out)
-        #然后根据stride的值，对结果进行平均池化
         out = self.bn3(self.conv3(out))
 
         if self.downsample is not None:
@@ -348,7 +347,6 @@ class CLIP(nn.Module):
 
     def encode_text(self, text):
         x = self.token_embedding(text).type(self.dtype)  # [batch_size, n_ctx, d_model]
-        #在这个方法中，首先使用 self.token_embedding 对输入的文本进行编码处理，将其转化为词嵌入表示
 
         x = x + self.positional_embedding.type(self.dtype)
         x = x.permute(1, 0, 2)  # NLD -> LND

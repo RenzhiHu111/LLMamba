@@ -5,20 +5,27 @@ from copy import deepcopy
 from os import path as osp
 import os
 import random
+
 import torch.nn.functional as F
 from functools import partial
+
+import numpy as np
+import cv2
+
 import glob
+
 from basicsr.models.archs import define_network
 from basicsr.models.base_model import BaseModel
 from basicsr.utils import get_root_logger, imwrite, tensor2img
 loss_module = importlib.import_module('basicsr.models.losses')
 metric_module = importlib.import_module('basicsr.metrics')
 
-try:
+try :
     from torch.cuda.amp import autocast, GradScaler
     load_amp = True
 except:
     load_amp = False
+
 
 class Mixing_Augment:
     def __init__(self, mixup_beta, use_identity, device):
@@ -52,16 +59,20 @@ class Mixing_Augment:
 
 
 class ImageCleanModel(BaseModel):
+    """Base Deblur model for single image deblur."""
+
     def __init__(self, opt):
         super(ImageCleanModel, self).__init__(opt)
 
+        # define mixed precision
         self.use_amp = opt.get('use_amp', False) and load_amp
         self.amp_scaler = GradScaler(enabled=self.use_amp)
         if self.use_amp:
             print('Using Automatic Mixed Precision')
         else:
             print('Not using Automatic Mixed Precision')
-
+                  
+        # define network
         self.mixing_flag = self.opt['train']['mixing_augs'].get('mixup', False)
         if self.mixing_flag:
             mixup_beta = self.opt['train']['mixing_augs'].get(
@@ -73,7 +84,9 @@ class ImageCleanModel(BaseModel):
 
         self.net_g = define_network(deepcopy(opt['network_g']))
         self.net_g = self.model_to_device(self.net_g)
+        # self.print_network(self.net_g)
 
+        # load pretrained models
         load_path = self.opt['path'].get('pretrain_network_g', None)
         if load_path is not None:
             self.load_network(self.net_g, load_path,
@@ -91,19 +104,22 @@ class ImageCleanModel(BaseModel):
             logger = get_root_logger()
             logger.info(
                 f'Use Exponential Moving Average with decay: {self.ema_decay}')
-
+            # define network net_g with Exponential Moving Average (EMA)
+            # net_g_ema is used only for testing on one GPU and saving
+            # There is no need to wrap with DistributedDataParallel
             self.net_g_ema = define_network(self.opt['network_g']).to(
                 self.device)
-
+            # load pretrained model
             load_path = self.opt['path'].get('pretrain_network_g', None)
             if load_path is not None:
                 self.load_network(self.net_g_ema, load_path,
                                   self.opt['path'].get('strict_load_g',
                                                        True), 'params_ema')
             else:
-                self.model_ema(0)
+                self.model_ema(0)  # copy net_g weight
             self.net_g_ema.eval()
 
+        # define losses
         if train_opt.get('pixel_opt'):
             self.cri_pix = []
             for loss_opt in train_opt['pixel_opt']:
@@ -116,6 +132,7 @@ class ImageCleanModel(BaseModel):
         else:
             raise ValueError('pixel loss are None.')
 
+        # set up optimizers and schedulers
         self.setup_optimizers()
         self.setup_schedulers()
 
@@ -180,6 +197,7 @@ class ImageCleanModel(BaseModel):
             gra = self.compute_gradient_map(self.gt)
 
             loss_dict = OrderedDict()
+            # pixel loss
             l_pix = 0.
 
             for loss_fn, weight in self.cri_pix:
@@ -192,9 +210,11 @@ class ImageCleanModel(BaseModel):
 
         self.amp_scaler.scale(l_pix).backward()
         self.amp_scaler.unscale_(self.optimizer_g)
+        # l_pix.backward()
 
         if self.opt['train']['use_grad_clip']:
             torch.nn.utils.clip_grad_norm_(self.net_g.parameters(), 0.01)
+        # self.optimizer_g.step()
         self.amp_scaler.step(self.optimizer_g)
         self.amp_scaler.update()
 
@@ -260,6 +280,7 @@ class ImageCleanModel(BaseModel):
                 metric: 0
                 for metric in self.opt['val']['metrics'].keys()
             }
+        # pbar = tqdm(total=len(dataloader), unit='image')
 
         window_size = self.opt['val'].get('window_size', 0)
 
@@ -282,6 +303,7 @@ class ImageCleanModel(BaseModel):
                 gt_img = tensor2img([visuals['gt']], rgb2bgr=rgb2bgr)
                 del self.gt
 
+            # tentative for out of GPU memory
             del self.lq
             del self.output
             torch.cuda.empty_cache()
@@ -314,6 +336,7 @@ class ImageCleanModel(BaseModel):
                 imwrite(gt_img, save_gt_img_path)
 
             if with_metrics:
+                # calculate metrics
                 opt_metric = deepcopy(self.opt['val']['metrics'])
                 if use_image:
                     for name, opt_ in opt_metric.items():
@@ -353,7 +376,6 @@ class ImageCleanModel(BaseModel):
         out_dict = OrderedDict()
         out_dict['lq'] = self.lq.detach().cpu()
         out_dict['result'] = self.output.detach().cpu()
-        # 梯度图
         out_dict['result1'] = self.output1.detach().cpu()
         if hasattr(self, 'gt'):
             out_dict['gt'] = self.gt.detach().cpu()

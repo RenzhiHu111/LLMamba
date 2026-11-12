@@ -11,6 +11,7 @@ from .logger import get_root_logger
 
 
 def set_random_seed(seed):
+    """Set random seeds."""
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -23,6 +24,11 @@ def get_time_str():
 
 
 def mkdir_and_rename(path):
+    """mkdirs. If path exists, rename it with timestamp and create a new one.
+
+    Args:
+        path (str): Folder path.
+    """
     if osp.exists(path):
         new_name = path + '_archived_' + get_time_str()
         print(f'Path already exists. Rename it to {new_name}', flush=True)
@@ -31,6 +37,11 @@ def mkdir_and_rename(path):
 
 
 def mkdir_and_rename2(path, rename_flag):
+    """mkdirs. If path exists, rename it with timestamp and create a new one.
+
+    Args:
+        path (str): Folder path.
+    """
     if osp.exists(path) and rename_flag:
         new_name = path + '_archived_' + get_time_str()
         print(f'Path already exists. Rename it to {new_name}', flush=True)
@@ -40,7 +51,9 @@ def mkdir_and_rename2(path, rename_flag):
 
 @master_only
 def make_exp_dirs(opt):
+    """Make dirs for experiments."""
     path_opt = opt['path'].copy()
+    # os.makedirs(opt['path']['experiments_root'], exist_ok=True)
     opt['rename_flag'] = False
     try:
         l = len(os.listdir(
@@ -61,6 +74,20 @@ def make_exp_dirs(opt):
 
 
 def scandir(dir_path, suffix=None, recursive=False, full_path=False):
+    """Scan a directory to find the interested files.
+
+    Args:
+        dir_path (str): Path of the directory.
+        suffix (str | tuple(str), optional): File suffix that we are
+            interested in. Default: None.
+        recursive (bool, optional): If set to True, recursively scan the
+            directory. Default: False.
+        full_path (bool, optional): If set to True, include the dir_path.
+            Default: False.
+
+    Returns:
+        A generator for all the interested files with relative pathes.
+    """
 
     if (suffix is not None) and not isinstance(suffix, (str, tuple)):
         raise TypeError('"suffix" must be a string or tuple of strings')
@@ -90,6 +117,20 @@ def scandir(dir_path, suffix=None, recursive=False, full_path=False):
 
 
 def scandir_SIDD(dir_path, keywords=None, recursive=False, full_path=False):
+    """Scan a directory to find the interested files.
+
+    Args:
+        dir_path (str): Path of the directory.
+        keywords (str | tuple(str), optional): File keywords that we are
+            interested in. Default: None.
+        recursive (bool, optional): If set to True, recursively scan the
+            directory. Default: False.
+        full_path (bool, optional): If set to True, include the dir_path.
+            Default: False.
+
+    Returns:
+        A generator for all the interested files with relative pathes.
+    """
 
     if (keywords is not None) and not isinstance(keywords, (str, tuple)):
         raise TypeError('"keywords" must be a string or tuple of strings')
@@ -119,7 +160,12 @@ def scandir_SIDD(dir_path, keywords=None, recursive=False, full_path=False):
 
 
 def check_resume(opt, resume_iter):
+    """Check resume states and pretrain_network paths.
 
+    Args:
+        opt (dict): Options.
+        resume_iter (int): Resume iteration.
+    """
     logger = get_root_logger()
     if opt['path']['resume_state']:
         # get all the networks
@@ -143,6 +189,15 @@ def check_resume(opt, resume_iter):
 
 
 def sizeof_fmt(size, suffix='B'):
+    """Get human readable file size.
+
+    Args:
+        size (int): File size.
+        suffix (str): Suffix. Default: 'B'.
+
+    Return:
+        str: Formated file siz.
+    """
     for unit in ['', 'K', 'M', 'G', 'T', 'P', 'E', 'Z']:
         if abs(size) < 1024.0:
             return f'{size:3.1f} {unit}{suffix}'

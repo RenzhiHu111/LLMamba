@@ -5,11 +5,88 @@ from basicsr.metrics.metric_util import reorder_image, to_y_channel
 import skimage.metrics
 import torch
 
+
+# def calculate_psnr(img1,
+#                    img2,
+#                    crop_border,
+#                    input_order='HWC',
+#                    test_y_channel=False):
+#     """Calculate PSNR (Peak Signal-to-Noise Ratio).
+#
+#     Ref: https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
+#
+#     Args:
+#         img1 (ndarray/tensor): Images with range [0, 255]/[0, 1].
+#         img2 (ndarray/tensor): Images with range [0, 255]/[0, 1].
+#         crop_border (int): Cropped pixels in each edge of an image. These
+#             pixels are not involved in the PSNR calculation.
+#         input_order (str): Whether the input order is 'HWC' or 'CHW'.
+#             Default: 'HWC'.
+#         test_y_channel (bool): Test on Y channel of YCbCr. Default: False.
+#
+#     Returns:
+#         float: psnr result.
+#     """
+#
+#     assert img1.shape == img2.shape, (
+#         f'Image shapes are differnet: {img1.shape}, {img2.shape}.')
+#     if input_order not in ['HWC', 'CHW']:
+#         raise ValueError(
+#             f'Wrong input_order {input_order}. Supported input_orders are '
+#             '"HWC" and "CHW"')
+#     if type(img1) == torch.Tensor:
+#         if len(img1.shape) == 4:
+#             img1 = img1.squeeze(0)
+#         print(img1.shape)
+#         img1 = img1.detach().cpu().numpy().transpose(1,2,0)
+#         img1 = img1.detach().cpu().numpy()
+#         img1_transposed = [image.transpose(1, 2, 0) for image in img1]
+#     if type(img2) == torch.Tensor:
+#         if len(img2.shape) == 4:
+#             img2 = img2.squeeze(0)
+#         img2 = img2.detach().cpu().numpy().transpose(1,2,0)
+#
+#     img1 = reorder_image(img1, input_order=input_order)
+#     img2 = reorder_image(img2, input_order=input_order)
+#     img1 = img1.astype(np.float64)
+#     img2 = img2.astype(np.float64)
+#
+#     if crop_border != 0:
+#         img1 = img1[crop_border:-crop_border, crop_border:-crop_border, ...]
+#         img2 = img2[crop_border:-crop_border, crop_border:-crop_border, ...]
+#
+#     if test_y_channel:
+#         img1 = to_y_channel(img1)
+#         img2 = to_y_channel(img2)
+#
+#     mse = np.mean((img1 - img2)**2)
+#     if mse == 0:
+#         return float('inf')
+#     max_value = 1. if img1.max() <= 1 else 255.
+#     return 20. * np.log10(max_value / np.sqrt(mse))
+
+
 def calculate_psnr(img1,
                    img2,
                    crop_border,
                    input_order='HWC',
                    test_y_channel=False):
+    """Calculate PSNR (Peak Signal-to-Noise Ratio).
+
+    Ref: https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
+
+    Args:
+        img1 (ndarray/tensor): Images with range [0, 255]/[0, 1].
+        img2 (ndarray/tensor): Images with range [0, 255]/[0, 1].
+        crop_border (int): Cropped pixels in each edge of an image. These
+            pixels are not involved in the PSNR calculation.
+        input_order (str): Whether the input order is 'HWC' or 'CHW'.
+            Default: 'HWC'.
+        test_y_channel (bool): Test on Y channel of YCbCr. Default: False.
+
+    Returns:
+        float: psnr result.
+    """
 
     # Handle input as tensor and convert to NumPy array
     def to_numpy(img):
@@ -54,6 +131,17 @@ def calculate_psnr(img1,
 
 
 def _ssim(img1, img2):
+    """Calculate SSIM (structural similarity) for one channel images.
+
+    It is called by func:`calculate_ssim`.
+
+    Args:
+        img1 (ndarray): Images with range [0, 255] with order 'HWC'.
+        img2 (ndarray): Images with range [0, 255] with order 'HWC'.
+
+    Returns:
+        float: ssim result.
+    """
 
     C1 = (0.01 * 255)**2
     C2 = (0.03 * 255)**2
@@ -123,7 +211,17 @@ def _generate_3d_gaussian_kernel():
 
 def _ssim_3d(img1, img2, max_value):
     assert len(img1.shape) == 3 and len(img2.shape) == 3
+    """Calculate SSIM (structural similarity) for one channel images.
 
+    It is called by func:`calculate_ssim`.
+
+    Args:
+        img1 (ndarray): Images with range [0, 255]/[0, 1] with order 'HWC'.
+        img2 (ndarray): Images with range [0, 255]/[0, 1] with order 'HWC'.
+
+    Returns:
+        float: ssim result.
+    """
     C1 = (0.01 * max_value) ** 2
     C2 = (0.03 * max_value) ** 2
     img1 = img1.astype(np.float64)
@@ -152,6 +250,17 @@ def _ssim_3d(img1, img2, max_value):
 
 def _ssim_cly(img1, img2):
     assert len(img1.shape) == 2 and len(img2.shape) == 2
+    """Calculate SSIM (structural similarity) for one channel images.
+
+    It is called by func:`calculate_ssim`.
+
+    Args:
+        img1 (ndarray): Images with range [0, 255] with order 'HWC'.
+        img2 (ndarray): Images with range [0, 255] with order 'HWC'.
+
+    Returns:
+        float: ssim result.
+    """
 
     C1 = (0.01 * 255)**2
     C2 = (0.03 * 255)**2
@@ -185,6 +294,29 @@ def calculate_ssim(img1,
                    crop_border,
                    input_order='HWC',
                    test_y_channel=False):
+    """Calculate SSIM (structural similarity).
+
+    Ref:
+    Image quality assessment: From error visibility to structural similarity
+
+    The results are the same as that of the official released MATLAB code in
+    https://ece.uwaterloo.ca/~z70wang/research/ssim/.
+
+    For three-channel images, SSIM is calculated for each channel and then
+    averaged.
+
+    Args:
+        img1 (ndarray): Images with range [0, 255].
+        img2 (ndarray): Images with range [0, 255].
+        crop_border (int): Cropped pixels in each edge of an image. These
+            pixels are not involved in the SSIM calculation.
+        input_order (str): Whether the input order is 'HWC' or 'CHW'.
+            Default: 'HWC'.
+        test_y_channel (bool): Test on Y channel of YCbCr. Default: False.
+
+    Returns:
+        float: ssim result.
+    """
 
     assert img1.shape == img2.shape, (
         f'Image shapes are differnet: {img1.shape}, {img2.shape}.')

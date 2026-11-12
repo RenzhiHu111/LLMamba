@@ -8,7 +8,45 @@ from basicsr.data.transforms import augment, paired_random_crop
 from basicsr.utils import FileClient, get_root_logger, imfrombytes, img2tensor
 from basicsr.utils.flow_util import dequantize_flow
 
+
 class REDSDataset(data.Dataset):
+    """REDS dataset for training.
+
+    The keys are generated from a meta info txt file.
+    basicsr/data/meta_info/meta_info_REDS_GT.txt
+
+    Each line contains:
+    1. subfolder (clip) name; 2. frame number; 3. image shape, seperated by
+    a white space.
+    Examples:
+    000 100 (720,1280,3)
+    001 100 (720,1280,3)
+    ...
+
+    Key examples: "000/00000000"
+    GT (gt): Ground-Truth;
+    LQ (lq): Low-Quality, e.g., low-resolution/blurry/noisy/compressed frames.
+
+    Args:
+        opt (dict): Config for train dataset. It contains the following keys:
+            dataroot_gt (str): Data root path for gt.
+            dataroot_lq (str): Data root path for lq.
+            dataroot_flow (str, optional): Data root path for flow.
+            meta_info_file (str): Path for meta information file.
+            val_partition (str): Validation partition types. 'REDS4' or
+                'official'.
+            io_backend (dict): IO backend type and other kwarg.
+
+            num_frame (int): Window size for input frames.
+            gt_size (int): Cropped patched size for gt patches.
+            interval_list (list): Interval list for temporal augmentation.
+            random_reverse (bool): Random reverse input frames.
+            use_flip (bool): Use horizontal flips.
+            use_rot (bool): Use rotation (use vertical flip and transposing h
+                and w for implementation).
+
+            scale (bool): Scale, which will be added automatically.
+    """
 
     def __init__(self, opt):
         super(REDSDataset, self).__init__()
@@ -42,6 +80,7 @@ class REDSDataset(data.Dataset):
             v for v in self.keys if v.split('/')[0] not in val_partition
         ]
 
+        # file client (io backend)
         self.file_client = None
         self.io_backend_opt = opt['io_backend']
         self.is_lmdb = False
@@ -56,6 +95,7 @@ class REDSDataset(data.Dataset):
                 self.io_backend_opt['db_paths'] = [self.lq_root, self.gt_root]
                 self.io_backend_opt['client_keys'] = ['lq', 'gt']
 
+        # temporal augmentation configs
         self.interval_list = opt['interval_list']
         self.random_reverse = opt['random_reverse']
         interval_str = ','.join(str(x) for x in opt['interval_list'])
@@ -71,13 +111,16 @@ class REDSDataset(data.Dataset):
         scale = self.opt['scale']
         gt_size = self.opt['gt_size']
         key = self.keys[index]
-        clip_name, frame_name = key.split('/')
+        clip_name, frame_name = key.split('/')  # key example: 000/00000000
         center_frame_idx = int(frame_name)
 
+        # determine the neighboring frames
         interval = random.choice(self.interval_list)
 
+        # ensure not exceeding the borders
         start_frame_idx = center_frame_idx - self.num_half_frames * interval
         end_frame_idx = center_frame_idx + self.num_half_frames * interval
+        # each clip has 100 frames starting from 0 to 99
         while (start_frame_idx < 0) or (end_frame_idx > 99):
             center_frame_idx = random.randint(0, 99)
             start_frame_idx = (
@@ -88,12 +131,14 @@ class REDSDataset(data.Dataset):
             range(center_frame_idx - self.num_half_frames * interval,
                   center_frame_idx + self.num_half_frames * interval + 1,
                   interval))
+        # random reverse
         if self.random_reverse and random.random() < 0.5:
             neighbor_list.reverse()
 
         assert len(neighbor_list) == self.num_frame, (
             f'Wrong length of neighbor list: {len(neighbor_list)}')
 
+        # get the GT frame (as the center frame)
         if self.is_lmdb:
             img_gt_path = f'{clip_name}/{frame_name}'
         else:
@@ -101,6 +146,7 @@ class REDSDataset(data.Dataset):
         img_bytes = self.file_client.get(img_gt_path, 'gt')
         img_gt = imfrombytes(img_bytes, float32=True)
 
+        # get the neighboring LQ frames
         img_lqs = []
         for neighbor in neighbor_list:
             if self.is_lmdb:
@@ -111,8 +157,10 @@ class REDSDataset(data.Dataset):
             img_lq = imfrombytes(img_bytes, float32=True)
             img_lqs.append(img_lq)
 
+        # get flows
         if self.flow_root is not None:
             img_flows = []
+            # read previous flows
             for i in range(self.num_half_frames, 0, -1):
                 if self.is_lmdb:
                     flow_path = f'{clip_name}/{frame_name}_p{i}'
@@ -122,13 +170,13 @@ class REDSDataset(data.Dataset):
                 img_bytes = self.file_client.get(flow_path, 'flow')
                 cat_flow = imfrombytes(
                     img_bytes, flag='grayscale',
-                    float32=False)
+                    float32=False)  # uint8, [0, 255]
                 dx, dy = np.split(cat_flow, 2, axis=0)
                 flow = dequantize_flow(
                     dx, dy, max_val=20,
-                    denorm=False)
+                    denorm=False)  # we use max_val 20 here.
                 img_flows.append(flow)
-
+            # read next flows
             for i in range(1, self.num_half_frames + 1):
                 if self.is_lmdb:
                     flow_path = f'{clip_name}/{frame_name}_n{i}'
@@ -142,17 +190,21 @@ class REDSDataset(data.Dataset):
                 dx, dy = np.split(cat_flow, 2, axis=0)
                 flow = dequantize_flow(
                     dx, dy, max_val=20,
-                    denorm=False)
+                    denorm=False)  # we use max_val 20 here.
                 img_flows.append(flow)
 
+            # for random crop, here, img_flows and img_lqs have the same
+            # spatial size
             img_lqs.extend(img_flows)
 
+        # randomly crop
         img_gt, img_lqs = paired_random_crop(img_gt, img_lqs, gt_size, scale,
                                              img_gt_path)
         if self.flow_root is not None:
             img_lqs, img_flows = img_lqs[:self.num_frame], img_lqs[self.
                                                                    num_frame:]
 
+        # augmentation - flip, rotate
         img_lqs.append(img_gt)
         if self.flow_root is not None:
             img_results, img_flows = augment(img_lqs, self.opt['use_flip'],
@@ -167,10 +219,15 @@ class REDSDataset(data.Dataset):
 
         if self.flow_root is not None:
             img_flows = img2tensor(img_flows)
+            # add the zero center flow
             img_flows.insert(self.num_half_frames,
                              torch.zeros_like(img_flows[0]))
             img_flows = torch.stack(img_flows, dim=0)
 
+        # img_lqs: (t, c, h, w)
+        # img_flows: (t, 2, h, w)
+        # img_gt: (c, h, w)
+        # key: str
         if self.flow_root is not None:
             return {'lq': img_lqs, 'flow': img_flows, 'gt': img_gt, 'key': key}
         else:

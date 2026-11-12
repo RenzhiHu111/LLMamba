@@ -57,7 +57,15 @@ class FaceRestorationHelper(object):
                      img_path,
                      upsample_num_times=1,
                      only_keep_largest=False):
+        """
+        Args:
+            img_path (str): Image path.
+            upsample_num_times (int): Upsamples the image before running the
+                face detector
 
+        Returns:
+            int: Number of detected faces.
+        """
         self.read_input_image(img_path)
         det_faces = self.face_detector(self.input_img, upsample_num_times)
         if len(det_faces) == 0:
@@ -86,7 +94,10 @@ class FaceRestorationHelper(object):
         return len(self.all_landmarks_5)
 
     def get_face_landmarks_68(self):
+        """Get 68 densemarks for cropped images.
 
+        Should only have one face at most in the cropped image.
+        """
         num_detected_face = 0
         for idx, face in enumerate(self.cropped_faces):
             # face detection
@@ -121,7 +132,10 @@ class FaceRestorationHelper(object):
     def warp_crop_faces(self,
                         save_cropped_path=None,
                         save_inverse_affine_path=None):
+        """Get affine matrix, warp and cropped faces.
 
+        Also get inverse affine matrix for post-processing.
+        """
         for idx, landmark in enumerate(self.all_landmarks_5):
             # use 5 landmarks to get affine matrix
             self.similarity_trans.estimate(landmark, self.face_template)
