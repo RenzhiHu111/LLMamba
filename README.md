@@ -87,7 +87,7 @@ Low-light images suffer from multi-level degradations: insufficient illumination
 
 ## Weights and Results 🧾
 
-All the weights that we trained on different datasets are available at [Baidu Pan](https://pan.baidu.com/s/1sZa2yYpuy4d8Ap2zleA99Q?pwd=6kn3) (code: `6kn3`). The enhanced results of LLMamba and all compared methods on all test sets are available at [Baidu Pan](https://pan.baidu.com/s/1sZa2yYpuy4d8Ap2zleA99Q?pwd=6kn3) (code: `6kn3`). For the compared methods, we use their official pretrained weights for the corresponding dataset when they are released, and retrain the other methods with the settings recommended in their papers.
+All the weights that we trained on different datasets are available at [Baidu Pan](https://pan.baidu.com/s/1oJSPD4sKPRtC1WTYyUer0w?pwd=iqj9) (code: `iqj9`). The enhanced results of LLMamba and all compared methods on all test sets are available at [Baidu Pan](https://pan.baidu.com/s/1oJSPD4sKPRtC1WTYyUer0w?pwd=iqj9) (code: `iqj9`). For the compared methods, we use their official pretrained weights for the corresponding dataset when they are released, and retrain the other methods with the settings recommended in their papers.
 
 The metrics below are the mean ± standard deviation over three random seeds, as reported in the paper. The released weights come from one of these runs, so their scores can differ slightly from the means.
 
@@ -154,7 +154,7 @@ pip install mamba-ssm --no-build-isolation
 python setup.py develop --no_cuda_ext
 ```
 
-The CLIP loss uses `ViT-B-32.pt` and `RN101.pt`. The code loads them from `basicsr/clip_model/` in both training and testing. You can download them from [Baidu Pan](https://pan.baidu.com/s/1sZa2yYpuy4d8Ap2zleA99Q?pwd=6kn3) (code: `6kn3`) and put them in `basicsr/clip_model/`; if they are missing, they are downloaded from OpenAI automatically on the first run.
+The CLIP loss uses `ViT-B-32.pt` and `RN101.pt`. The code loads them from `basicsr/clip_model/` in both training and testing. You can download them from [Baidu Pan](https://pan.baidu.com/s/1oJSPD4sKPRtC1WTYyUer0w?pwd=iqj9) (code: `iqj9`) and put them in `basicsr/clip_model/`; if they are missing, they are downloaded from OpenAI automatically on the first run.
 
 ### Data Preparation
 
@@ -166,7 +166,7 @@ The CLIP loss uses `ViT-B-32.pt` and `RN101.pt`. The code loads them from `basic
 | LSRW (Huawei + Nikon) | 5,600 / 50 | `LSRW` | [R2RNet](https://github.com/JianghaiSCU/R2RNet) |
 | EndoVis17 (low-light) | 1,800 / 1,200 | `Endovis17` | [LighTDiff](https://github.com/DavisMeee/LighTDiff) |
 | EndoVis18 (low-light) | 1,639 / 596 | `Endovis18` | [LighTDiff](https://github.com/DavisMeee/LighTDiff) |
-| Low-light stereo images (Flickr1024 + KITTI 2012&2015 + Middlebury) | 1,720 / 314 | `Stereo_image` | [Baidu Pan](https://pan.baidu.com/s/1sZa2yYpuy4d8Ap2zleA99Q?pwd=6kn3) (code: `6kn3`) |
+| Low-light stereo images (Flickr1024 + KITTI 2012&2015 + Middlebury) | 1,720 / 314 | `Stereo_image` | [Baidu Pan](https://pan.baidu.com/s/1oJSPD4sKPRtC1WTYyUer0w?pwd=iqj9) (code: `iqj9`) |
 
 LOL-v2-real and LOL-v2-syn come in the same LOL-v2 download: put `Real_captured` in `LOLv2_real` and `Synthetic` in `LOLv2_syn`, and rename `Train`/`Test` to `train`/`test` and `Normal`/`Low` to `high`/`low`. For LOL-v1, `our485` is the training set and `eval15` the test set.
 
@@ -233,7 +233,7 @@ basicsr/data
 
 ## 2. Testing 🌒
 
-Download our weights from [Baidu Pan](https://pan.baidu.com/s/1sZa2yYpuy4d8Ap2zleA99Q?pwd=6kn3) (code: `6kn3`) and put them in `basicsr/pretrained`:
+Download our weights from [Baidu Pan](https://pan.baidu.com/s/1oJSPD4sKPRtC1WTYyUer0w?pwd=iqj9) (code: `iqj9`) and put them in `basicsr/pretrained`:
 
 <details> <summary>weights (click to expand)</summary>
 
